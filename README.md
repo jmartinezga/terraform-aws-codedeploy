@@ -65,6 +65,6 @@ No modules.
 
 | Name | Description |
 |------|-------------|
-| <a name="output_cd_application_id"></a> [cd\_application\_id](#output\_cd\_application\_id) | CodeDeploy Application id. |
-| <a name="output_cd_arn"></a> [cd\_arn](#output\_cd\_arn) | CodeDeploy arn. |
+| <a name="output_application_id"></a> [application\_id](#output\_application\_id) | CodeDeploy Application id. |
+| <a name="output_arn"></a> [arn](#output\_arn) | CodeDeploy arn. |
 <!-- END OF PRE-COMMIT-TERRAFORM DOCS HOOK -->
