@@ -7,7 +7,6 @@ SHELL = /bin/sh
 init: clean
 	terraform init -upgrade
 	terraform fmt
-	terraform -version | head -1 | cut -d" " -f2 | tr -s '\n''' | tee tf_version
 	tflint
 	terraform validate
 
