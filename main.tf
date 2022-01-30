@@ -1,5 +1,9 @@
+#https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity
+data "aws_caller_identity" "current" {}
+
 #https://registry.terraform.io/providers/hashicorp/aws/latest/docs
 locals {
+  account_id     = data.aws_caller_identity.current.account_id
   cd_name        = "${var.environment}-${var.cd_app_name}"
   dc_name        = "${var.environment}-${var.cd_app_name}-dc"
   dg_name        = "${var.environment}-${var.cd_app_name}-dg"
@@ -12,6 +16,36 @@ locals {
     module_version = "${local.module_version}",
     last_update    = "${local.last_update}"
   })
+}
+
+#https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket
+#tfsec:ignore:AWS002
+resource "aws_s3_bucket" "this" {
+  bucket = "codedeploy-${var.cd_app_name}-${local.account_id}"
+  acl    = "private"
+
+  versioning {
+    enabled = true
+  }
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "aws:kms"
+      }
+    }
+  }
+
+  tags = local.tags
+}
+
+#https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block
+
+resource "aws_s3_bucket_public_access_block" "this" {
+  bucket                  = aws_s3_bucket.this.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 #https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sns_topic
