@@ -5,8 +5,6 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id     = data.aws_caller_identity.current.account_id
   cd_name        = "${var.environment}-${var.cd_app_name}"
-  dc_name        = "${var.environment}-${var.cd_app_name}-dc"
-  dg_name        = "${var.environment}-${var.cd_app_name}-dg"
   module_version = trimspace(chomp(file("./version")))
   last_update    = formatdate("YYYY-MM-DD hh:mm:ss", timestamp())
   tags = merge(var.tags, {
@@ -70,21 +68,30 @@ resource "aws_codedeploy_app" "this" {
 }
 
 #https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/codedeploy_deployment_config
-resource "aws_codedeploy_deployment_config" "this" {
-  deployment_config_name = local.dc_name
-
+resource "aws_codedeploy_deployment_config" "blue_green" {
+  deployment_config_name = "${local.cd_name}-blue_green"
+  compute_platform       = "Server"
   minimum_healthy_hosts {
     type  = "FLEET_PERCENT"
     value = 50
   }
 }
 
+resource "aws_codedeploy_deployment_config" "in_place" {
+  deployment_config_name = "${local.cd_name}-in_place"
+  compute_platform       = "Server"
+  minimum_healthy_hosts {
+    type  = "HOST_COUNT"
+    value = 1
+  }
+}
+
 #https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/codedeploy_deployment_group
-resource "aws_codedeploy_deployment_group" "this" {
+resource "aws_codedeploy_deployment_group" "blue_green" {
   app_name               = aws_codedeploy_app.this.name
-  deployment_group_name  = local.dg_name
+  deployment_group_name  = "${local.cd_name}-blue_green"
   service_role_arn       = var.dg_service_role
-  deployment_config_name = aws_codedeploy_deployment_config.this.id
+  deployment_config_name = aws_codedeploy_deployment_config.blue_green.id
   autoscaling_groups     = var.dg_asg_name
 
   deployment_style {
@@ -111,6 +118,36 @@ resource "aws_codedeploy_deployment_group" "this" {
     terminate_blue_instances_on_deployment_success {
       action                           = "TERMINATE"
       termination_wait_time_in_minutes = 0
+    }
+  }
+
+  auto_rollback_configuration {
+    enabled = true
+    events  = ["DEPLOYMENT_FAILURE"]
+  }
+
+  trigger_configuration {
+    trigger_events     = ["DeploymentFailure", "DeploymentStop"]
+    trigger_name       = "event-trigger"
+    trigger_target_arn = aws_sns_topic.this.arn
+  }
+}
+
+resource "aws_codedeploy_deployment_group" "in_place" {
+  app_name               = aws_codedeploy_app.this.name
+  deployment_group_name  = "${local.cd_name}-in_place"
+  service_role_arn       = var.dg_service_role
+  deployment_config_name = aws_codedeploy_deployment_config.in_place.id
+  autoscaling_groups     = var.dg_asg_name
+
+  deployment_style {
+    deployment_option = "WITH_TRAFFIC_CONTROL"
+    deployment_type   = "IN_PLACE"
+  }
+
+  load_balancer_info {
+    target_group_info {
+      name = var.dg_lb_tg_name
     }
   }
 
